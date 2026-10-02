@@ -10,16 +10,16 @@ const usernameValid = username => typeof username === 'string' && /^[a-zA-Z0-9._
 const hashPassword = async (password, salt) => (await derive(password, salt, 64, { N:32768, r:8, p:1, maxmem:64*1024*1024 })).toString('hex');
 const publicUser = ({id,username,role}) => ({id,username,role});
 const fail = (status, message) => Object.assign(new Error(message), {status});
-export async function createVault(directory, {documentSource=null,createDocumentSource=null,defaultDriveFolderId=''}={}) {
+export async function createVault(directory, {documentSource=null,createDocumentSource=null,defaultDriveFolderId='',persistence=null}={}) {
   await mkdir(path.join(directory, 'files'), {recursive:true});
   const storePath = path.join(directory, 'index.json');
-  let store; try { store = JSON.parse(await readFile(storePath, 'utf8')); } catch(error) { if(error.code !== 'ENOENT') throw error; store = {users:[],documents:[]}; }
+  let store; if(persistence)store=await persistence.loadStore();else try { store = JSON.parse(await readFile(storePath, 'utf8')); } catch(error) { if(error.code !== 'ENOENT') throw error; store = {users:[],documents:[]}; }
   const configPath=path.join(directory,'drive-config.json');
   let driveConfig={folderId:defaultDriveFolderId,enabled:!!documentSource};
-  try{driveConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+  if(persistence)driveConfig=await persistence.loadConfig(driveConfig);else try{driveConfig=JSON.parse(await readFile(configPath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
   if(createDocumentSource)documentSource=driveConfig.enabled?createDocumentSource(driveConfig.folderId):null;
   let queue = Promise.resolve();
-  const mutate = operation => { const result = queue.then(async () => { const next = structuredClone(store); const value = await operation(next); await writeFile(storePath+'.tmp',JSON.stringify(next,null,2),{mode:0o600}); await rename(storePath+'.tmp',storePath); store=next; return value; }); queue=result.catch(()=>{});return result; };
+  const mutate = operation => { const result = queue.then(async () => { const next = structuredClone(store); const value = await operation(next); if(persistence){try{await persistence.saveStore(next);}catch(error){if(error.status===409)store=await persistence.loadStore();throw error;}}else{await writeFile(storePath+'.tmp',JSON.stringify(next,null,2),{mode:0o600}); await rename(storePath+'.tmp',storePath);} store=next; return value; }); queue=result.catch(()=>{});return result; };
   const records = () => documentSource ? store.driveDocuments || [] : store.documents;
   async function refreshDocuments() {
     if(!documentSource)return;
@@ -33,7 +33,15 @@ export async function createVault(directory, {documentSource=null,createDocument
         savedAt:previous?.remoteVersion===document.remoteVersion?previous.savedAt||null:null};
     });});
   }
-  const readDocument = document => documentSource ? documentSource.read(document) : readFile(path.join(directory,'files',document.id));
+  const readDocument = document => documentSource ? documentSource.read(document) : persistence ? persistence.readFile(document.id) : readFile(path.join(directory,'files',document.id));
+  const removeFile = id => persistence ? persistence.deleteFile(id) : unlink(path.join(directory,'files',id));
+  async function initialize(officerPassword,viewerPassword){
+    if(store.users.some(u=>u.role==='admin'))return;
+    if(!passwordValid(officerPassword)||!passwordValid(viewerPassword)||officerPassword===viewerPassword)throw Error('Choose distinct officer and viewer passwords of 12–256 characters.');
+    const users=[];
+    for(const [username,password,role]of [['officer',officerPassword,'admin'],['vault',viewerPassword,'viewer']]){const salt=randomBytes(32).toString('hex');users.push({id:randomUUID(),username,role,salt,hash:await hashPassword(password,salt)});}
+    await mutate(next=>{if(next.users.length)throw Error('Existing vault users require manual setup.');next.users=users;});
+  }
   async function createUser(username,password,role='viewer') {
     if(!usernameValid(username)||!passwordValid(password)||!['admin','viewer'].includes(role)) throw fail(400,'Use a 3–64 character username and a password of 12–256 characters.');
     const salt=randomBytes(32).toString('hex'); const hash=await hashPassword(password,salt);
@@ -83,7 +91,7 @@ export async function createVault(directory, {documentSource=null,createDocument
           if(source)await source.list();
           const next={folderId,enabled:value.enabled};
           const operation=queue.then(async()=>{
-            await writeFile(configPath+'.tmp',JSON.stringify(next,null,2),{mode:0o600});await rename(configPath+'.tmp',configPath);
+            if(persistence){try{await persistence.saveConfig(next);}catch(error){if(error.status===409){driveConfig=await persistence.loadConfig(driveConfig);documentSource=driveConfig.enabled?createDocumentSource(driveConfig.folderId):null;}throw error;}}else{await writeFile(configPath+'.tmp',JSON.stringify(next,null,2),{mode:0o600});await rename(configPath+'.tmp',configPath);}
             driveConfig=next;documentSource=source;
           });queue=operation.catch(()=>{});await operation;
           for(const [token,entry]of sessions)if(entry.userId!==current.user.id)sessions.delete(token);
@@ -137,11 +145,11 @@ export async function createVault(directory, {documentSource=null,createDocument
         const valid=extension==='pdf'?bytes.subarray(0,5).toString()==='%PDF-':extension==='png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):['jpg','jpeg'].includes(extension)?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:!bytes.includes(0)&&Buffer.from(bytes.toString('utf8')).equals(bytes);
         if(!valid)throw fail(415,'File contents do not match the selected document type.');
         const document={id:randomUUID(),name,extension,size:bytes.length,uploadedAt:new Date().toISOString()};const filePath=path.join(directory,'files',document.id);
-        await writeFile(filePath,bytes,{flag:'wx',mode:0o600});try{await mutate(next=>{next.documents.push(document);});}catch(error){await unlink(filePath);throw error;}send(res,201,{document});return true;
+        if(persistence)await persistence.writeFile(document.id,bytes);else await writeFile(filePath,bytes,{flag:'wx',mode:0o600});try{await mutate(next=>{next.documents.push(document);});}catch(error){await removeFile(document.id);throw error;}send(res,201,{document});return true;
       }
-      if(documentMatch&&req.method==='DELETE'){if(documentSource)throw fail(405,'Remove documents in your Google Drive folder.');await mutate(async next=>{const document=next.documents.find(d=>d.id===documentMatch[1]);if(!document)throw fail(404,'Document not found.');next.documents=next.documents.filter(d=>d.id!==document.id);});await unlink(path.join(directory,'files',documentMatch[1])).catch(error=>{if(error.code!=='ENOENT')throw error;});send(res,200,{message:'Document deleted.'});return true;}
+      if(documentMatch&&req.method==='DELETE'){if(documentSource)throw fail(405,'Remove documents in your Google Drive folder.');await mutate(async next=>{const document=next.documents.find(d=>d.id===documentMatch[1]);if(!document)throw fail(404,'Document not found.');next.documents=next.documents.filter(d=>d.id!==document.id);});await removeFile(documentMatch[1]).catch(error=>{if(error.code!=='ENOENT')throw error;});send(res,200,{message:'Document deleted.'});return true;}
       throw fail(404,'Vault endpoint not found.');
     }catch(error){if(!error.status)console.error(error);send(res,error.status||500,{error:error.status?error.message:'Vault request failed. Please try again.'});return true;}
   }
-  return {handle,createUser,hasAdmin:()=>store.users.some(u=>u.role==='admin')};
+  return {handle,createUser,initialize,hasAdmin:()=>store.users.some(u=>u.role==='admin')};
 }

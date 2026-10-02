@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: station-07-backend
+    runtime: node
+    branch: main
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false
+      - key: INITIAL_OFFICER_PASSWORD
+        sync: false
+      - key: INITIAL_VIEWER_PASSWORD
+        sync: false

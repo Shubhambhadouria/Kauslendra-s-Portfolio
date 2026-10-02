@@ -1,9 +1,10 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { createVault } from '../vault.js';
 
-const vault=await createVault(fileURLToPath(new URL('../.vault/',import.meta.url)));
+const vault=await createVault(path.resolve(process.env.VAULT_DIRECTORY || fileURLToPath(new URL('../.vault/',import.meta.url))));
 if(vault.hasAdmin()){console.error('The vault already has an administrator. Sign in to manage viewer access.');process.exit(1);}
 let hidden=false;
 const output=new Writable({write(chunk,encoding,callback){if(!hidden)process.stdout.write(chunk);callback();}});

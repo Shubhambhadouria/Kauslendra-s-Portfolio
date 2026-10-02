@@ -5,15 +5,24 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createVault } from './vault.js';
 import { createGoogleDriveSource } from './google-drive.js';
+import { createDatabaseStorage } from './database-storage.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const production = process.argv.includes('--production');
-const driveCredentialsPath=path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(root,'.vault','google-service-account.json'));
+if(production && process.env.RENDER && !process.env.DATABASE_URL)throw Error('Set DATABASE_URL before deploying on Render so vault data persists.');
+const vaultDirectory = path.resolve(process.env.VAULT_DIRECTORY || path.join(root, '.vault'));
+const contactDirectory = path.resolve(process.env.CONTACT_STORAGE_DIRECTORY || path.join(root, 'data'));
+const driveCredentialsPath=path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(vaultDirectory,'google-service-account.json'));
 const createDocumentSource = folderId => createGoogleDriveSource({folderId,
   credentialsPath:driveCredentialsPath});
 const defaultDriveFolderId=process.env.GOOGLE_DRIVE_FOLDER_ID||'';
-const vault = await createVault(path.join(root, '.vault'), {createDocumentSource,defaultDriveFolderId,
-  documentSource:defaultDriveFolderId?createDocumentSource(defaultDriveFolderId):null});
+const persistence=process.env.DATABASE_URL?await createDatabaseStorage(process.env.DATABASE_URL):null;
+const vault = await createVault(vaultDirectory, {createDocumentSource,defaultDriveFolderId,
+  persistence, documentSource:defaultDriveFolderId?createDocumentSource(defaultDriveFolderId):null});
+if(process.env.INITIAL_OFFICER_PASSWORD||process.env.INITIAL_VIEWER_PASSWORD){
+  await vault.initialize(process.env.INITIAL_OFFICER_PASSWORD,process.env.INITIAL_VIEWER_PASSWORD);
+  delete process.env.INITIAL_OFFICER_PASSWORD;delete process.env.INITIAL_VIEWER_PASSWORD;
+}
 const vite = production ? null : await (await import('vite')).createServer({ server: { middlewareMode: true, fs: { deny: ['**/.vault/**', '**/data/**', '**/.env*', '**/.git/**', path.join(root,'vault.js').replaceAll('\\','/'), '**/google-drive.js', driveCredentialsPath.replaceAll('\\','/'), '**/server.js', '**/scripts/**', '**/tests/**'] } }, appType: 'spa' });
 const rates = new Map();
 const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
@@ -41,8 +50,8 @@ const server = http.createServer(async (req, res) => {
       const key = req.socket.remoteAddress; const recent = (rates.get(key) || []).filter(time => Date.now() - time < 600000);
       if (recent.length >= 5) return json(res, 429, { error: 'Please wait before sending another message.' });
       recent.push(Date.now()); rates.set(key, recent);
-      await mkdir(path.join(root, 'data'), { recursive: true });
-      const id = randomUUID(); await appendFile(path.join(root, 'data/messages.ndjson'), JSON.stringify({ id, createdAt: new Date().toISOString(), ...message }) + '\n');
+      const id = randomUUID(); const savedMessage={ id, createdAt: new Date().toISOString(), ...message };
+      if(persistence)await persistence.saveMessage(savedMessage);else{await mkdir(contactDirectory, { recursive: true });await appendFile(path.join(contactDirectory, 'messages.ndjson'), JSON.stringify(savedMessage) + '\n');}
       return json(res, 201, { id, message: 'Message received. Thank you for reaching out.' });
     }
     if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Endpoint not found.' });
