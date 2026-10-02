@@ -27,6 +27,6 @@
 .vault-upload{padding:18px;border:1px dashed #d8cdb8;border-radius:6px}.vault-upload label{margin:0;font-weight:600}.vault-upload input{font-size:11px}.vault-upload small{display:block;margin-top:9px}.vault-upload .submit{margin-top:12px}
 .vault-access{border-top:1px solid #ded5c4;margin-top:25px;padding-top:18px}.vault-access summary{font-size:12px;color:#757c6a;cursor:pointer}.vault-access p{font-size:12px}.vault-login-note{display:block;margin-top:22px;line-height:1.6}
 select{display:block;width:100%;padding:12px;background:#f3eee3;color:#333;border:1px solid #dad3c3;border-radius:3px;margin-top:7px;font:inherit}
-@media(max-width:700px){header{flex-wrap:wrap;gap:16px}.brand{gap:8px}.brand-name{font-size:13px}.brand-sub{font-size:7px;letter-spacing:.5px}nav{width:100%;justify-content:space-between;gap:10px}nav button{font-size:11px}.intro{top:143px}.intro .eyebrow{font-size:8px;letter-spacing:2px}h1{font-size:39px}.vault-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vault-modal{padding:28px 20px}.vault-heading{align-items:baseline}.vault-summary{font-size:8px;letter-spacing:1px}}
+@media(max-width:700px){.brand{gap:8px}.brand-name{font-size:13px}.brand-sub{font-size:7px;letter-spacing:.5px}.vault-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vault-modal{padding:28px 20px}.vault-heading{align-items:baseline}.vault-summary{font-size:8px;letter-spacing:1px}}
 .drive-toggle{display:flex;align-items:center;gap:10px}
 .drive-toggle input{width:auto;margin:0;accent-color:#d65036}

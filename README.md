@@ -87,9 +87,9 @@ Implementation references: [OWASP file upload guidance](https://cheatsheetseries
 
 Use the **360°** control to rotate around the station, or drag the scene manually. The sky wraps around the camera and surrounding buildings continue in every direction. Reset stops automatic rotation and restores the starting viewpoint.
 
-The extinguisher welcome screen stays visible until the visitor clicks **Start exploring**. The scene then opens with a fire in the open area beside the station. The truck drives over with emergency lights, then its roof hose sprays water for seven seconds to extinguish the flames. The **water drop** control pauses or resumes water and replays the response after completion. Wet ground remains after extinguishing. The separate burning building has been removed.
+The extinguisher welcome screen stays visible until the visitor clicks **Start exploring**. The truck stays parked outside the station. The fire response, water spray and incident controls have been removed. Emergency lights, camera reset and 360-degree exploration remain available.
 
-The response has no smoke or audio effects. Opening a dialog pauses the response. Reduced-motion mode uses steady flames and a shorter truck approach. Run `node scripts/check-response.js` to verify movement, water controls, extinguishing and replay.
+The phone layout separates navigation, introduction, scene and controls. Floating scene labels are hidden on phones; training stays accessible through navigation. There are no smoke or audio effects.
 
 Drag to orbit, scroll to zoom, click the truck or hotspots to explore, toggle emergency lights, and reset the camera. Emergency lights cast alternating red and blue light onto the station and across the page. The glow follows the projected truck lamps as the camera moves. Reduced-motion mode uses a steady glow. The 3D scene stops drawing while a dialog is open to leave rendering resources available for document previews. Responsive layout, keyboard navigation, dialog focus management, and a WebGL fallback are included.
 
