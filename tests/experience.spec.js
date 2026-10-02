@@ -7,7 +7,7 @@ test('starts the 3D experience and opens accessible portfolio dialogs',async({pa
   await expect(page.locator('.loader')).toHaveClass(/departed/);await expect(page.locator('canvas')).toBeVisible();
   await page.getByRole('button',{name:'The officer',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByRole('heading',{name:'Kaushlendra Singh Chauhan'})).toBeVisible();await expect(page.getByRole('dialog')).toContainText('SBI');
   await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('button',{name:'Toggle emergency lights'}).click();await expect(page.getByRole('button',{name:'Toggle emergency lights'})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Toggle emergency lights'}).click();await expect(page.getByRole('button',{name:'Toggle emergency lights'})).toHaveAttribute('aria-pressed','false');
   await page.getByRole('button',{name:'Get in touch'}).click();await expect(page.getByLabel('Email address')).toBeVisible();
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth',await page.evaluate(()=>innerWidth));expect(errors).toEqual([]);
 });

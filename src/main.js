@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { addRealisticSurroundings, batchStaticSurroundings } from './surroundings.js';
+import { createIncidentResponse } from './incident-response.js';
 import { detailFireTruck } from './truck-details.js';
 import publicProfile from '../data/profile.json';
 
@@ -19,7 +20,6 @@ document.querySelector('#app').innerHTML = `<main class="app-shell"><header><div
 const vaultButton = document.createElement('button');
 vaultButton.dataset.section = 'vault'; vaultButton.textContent = 'Fire Vault ⌑';
 document.querySelector('nav').insertBefore(vaultButton, document.querySelector('[data-section="contact"]'));
-const trainingButton=document.createElement('button');trainingButton.dataset.section='training';trainingButton.className='mobile-training';trainingButton.textContent='Training';document.querySelector('nav').insertBefore(trainingButton,vaultButton);
 document.querySelector('.intro p').innerHTML = 'Kaushlendra Singh Chauhan<br>Fire Officer · SBI';
 document.querySelector('.brand-sub').textContent = 'KAUSHLENDRA SINGH CHAUHAN';
 document.querySelector('.loader p').textContent = 'Kaushlendra Singh Chauhan · Fire Officer at SBI';
@@ -68,15 +68,24 @@ const sirenGlow = document.createElement('div');
 sirenGlow.className = 'siren-glow'; sirenGlow.setAttribute('aria-hidden','true');
 sirenGlow.innerHTML = '<div class="siren-red"></div><div class="siren-blue"></div>';
 document.querySelector('.app-shell').append(sirenGlow);
+const waterButton = document.createElement('button');
+waterButton.className = 'tool water-tool'; waterButton.id = 'water';
+waterButton.setAttribute('aria-label', 'Spray water'); waterButton.setAttribute('aria-pressed', 'false');
+waterButton.title = 'Spray water from the roof hose';
+waterButton.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3C10 7 5 11 5 15a7 7 0 0 0 14 0c0-4-5-8-7-12Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 15a3 3 0 0 0 3 3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+document.querySelector('.toolbar').insertBefore(waterButton, document.querySelector('#reset'));
 const orbitButton = document.createElement('button'); orbitButton.className = 'tool orbit-tool';
 orbitButton.textContent = '360°'; orbitButton.title = 'Rotate around the station';
 orbitButton.setAttribute('aria-label', 'Toggle 360 degree view'); orbitButton.setAttribute('aria-pressed', 'false');
 document.querySelector('.toolbar').insertBefore(orbitButton, document.querySelector('#reset'));
+const waterStatus = document.createElement('div'); waterStatus.className = 'water-status';
+waterStatus.setAttribute('role', 'status'); waterStatus.textContent = 'Nearby fire · Use the water button';
+document.querySelector('.app-shell').append(waterStatus);
 function createWorld(){
   const container = document.querySelector('#scene');
   scene = new THREE.Scene(); scene.background = null;
   camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, .1, 100);
-  const initial = () => { camera.position.set(15,5.5,18); controls.target.set(0,1.2,.4); controls.update(); };
+  const initial = () => { camera.position.set(15,5.5,18); controls.target.set(2.4,1.4,.4); controls.update(); };
   renderer = new THREE.WebGLRenderer({ antialias:!compactDevice, alpha:true }); renderer.setPixelRatio(Math.min(devicePixelRatio,compactDevice?1:1.5)); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25; container.appendChild(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 9; controls.maxDistance = 23; controls.minPolarAngle = .35; controls.maxPolarAngle = Math.PI/2.1; initial(); controls.enabled = false;
   controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity;
@@ -167,15 +176,17 @@ function createWorld(){
   addRealisticSurroundings({scene, world, truck, box, cylinder, mat, surface, steel, dark, trim, red});
   detailFireTruck({truck, box, cylinder, steel, dark, red, renderer});
   batchStaticSurroundings(world, truck);
+  let response;
   function setSiren(value) {
     siren = value; sirenGlow.classList.toggle('is-on', value);
     const button = document.querySelector('#lights'); button.classList.toggle('active', value); button.setAttribute('aria-pressed', String(value));
   }
+  response = createIncidentResponse({world, truck, cylinder, box, steel, dark, reduced, button:waterButton, status:waterStatus, onSiren:setSiren});
   // Architecture is stationary; avoid redrawing its shadow map every animation frame.
   renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
-  let lastRenderedFrame = -Infinity;
+  let previousFrame, lastShadowFrame = 0, lastRenderedFrame = -Infinity;
   const points=[['about',new THREE.Vector3(1.5,2.0,-.1)],['experience',new THREE.Vector3(-1.4,2.1,2.1)],['training',new THREE.Vector3(3.5,.65,1)]];
-  function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.zoom=w<700?Math.min(.85,w/h*1.1):.83;camera.setViewOffset(w,h,0,w<700?0:-h*.10,w,h);camera.updateProjectionMatrix();document.querySelector('.hint').innerHTML=w<700?'Drag to explore · Tap the truck':'↔ Drag to explore <span>·</span> Scroll to get closer <span>·</span> Click to discover';}
+  function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.zoom=w<700?Math.min(.65,w/h*1.03):.83;camera.setViewOffset(w,h,0,-h*.10,w,h);camera.updateProjectionMatrix();}
   resize();window.addEventListener('resize',resize);
   document.querySelector('#reset').addEventListener('click',()=>{
     controls.autoRotate = false; orbitButton.classList.remove('active'); orbitButton.setAttribute('aria-pressed','false'); initial();
@@ -185,10 +196,16 @@ function createWorld(){
   renderer.domElement.addEventListener('pointerdown',event=>{pointerDown=[event.clientX,event.clientY];});
   renderer.domElement.addEventListener('pointerup',event=>{if(!pointerDown||Math.hypot(event.clientX-pointerDown[0],event.clientY-pointerDown[1])>5||!started)return;const bounds=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((event.clientX-bounds.left)/bounds.width*2-1,-(event.clientY-bounds.top)/bounds.height*2+1),camera);if(raycaster.intersectObjects(truck.children,true).length)openSection('experience');});
   renderer.setAnimationLoop(time=>{
-    if(!started || !backdrop.hidden || document.hidden)return;
+    if(!started || !backdrop.hidden || document.hidden){previousFrame=undefined;return;}
     if(time-lastRenderedFrame < 1000/(compactDevice?30:45))return;
     lastRenderedFrame=time;
     if(backdrop.hidden) controls.update();
+    const dt = previousFrame === undefined ? 0 : (time - previousFrame) / 1000;
+    previousFrame = time;
+    if(started && backdrop.hidden && !document.hidden) {
+      response.update(dt, time / 1000);
+      if(response.state === 'responding' && time - lastShadowFrame > 120) { renderer.shadowMap.needsUpdate = true; lastShadowFrame = time; }
+    }
     lights.forEach((light,i)=>{
       const pulse=reduced ? .6 : (Math.sin(time*Math.PI/650+i*Math.PI)+1)/2;
       const strength=siren ? pulse**3 : 0;
@@ -202,6 +219,6 @@ function createWorld(){
   renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();document.querySelector('.hint').textContent='3D rendering paused. Refresh to restore the scene.';});
 }
 let sceneReady=false;
-try{createWorld();sceneReady=true;}catch(error){console.error(error);document.querySelector('#scene').innerHTML='<div class="fallback"><h2>Your station is ready.</h2><p>This device could not start the 3D view. You can still explore the officer, service, and contact sections using the navigation.</p></div>';document.querySelector('.hotspots').hidden=true;document.querySelector('.toolbar').hidden=true;document.querySelector('.hint').hidden=true;}
+try{createWorld();sceneReady=true;}catch(error){console.error(error);waterStatus.hidden=true;document.querySelector('#scene').innerHTML='<div class="fallback"><h2>Your station is ready.</h2><p>This device could not start the 3D view. You can still explore the officer, service, and contact sections using the navigation.</p></div>';document.querySelector('.hotspots').hidden=true;document.querySelector('.toolbar').hidden=true;document.querySelector('.hint').hidden=true;}
 requestAnimationFrame(()=>{document.querySelector('.progress-bar').style.width='100%';document.querySelector('#percent').textContent='100';document.querySelector('.progress-label').firstChild.textContent='STATION READY · ';document.querySelector('.start').disabled=false;});
 document.querySelector('.start').addEventListener('click',()=>{started=true;document.querySelector('.loader').classList.add('departed');document.querySelector('.loader').setAttribute('inert','');if(sceneReady)controls.enabled=true;document.querySelector('nav button').focus();if(staticDeployment)fetch(`${hostedServiceOrigin}/api/health`,{mode:'no-cors',credentials:'omit',cache:'no-store'}).catch(()=>{});const requestedSection=new URLSearchParams(window.location.search).get('section');if(!staticDeployment && ['vault','contact'].includes(requestedSection))openSection(requestedSection);});
