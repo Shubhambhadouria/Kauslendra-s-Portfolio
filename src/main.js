@@ -9,6 +9,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { addRealisticSurroundings, batchStaticSurroundings } from './surroundings.js';
 import { createIncidentResponse } from './incident-response.js';
 import { detailFireTruck } from './truck-details.js';
+import publicProfile from '../data/profile.json';
+
+const staticDeployment = import.meta.env.MODE === 'pages';
 
 const extinguisher = `<svg class="extinguisher" viewBox="0 0 150 220" aria-label="Fire extinguisher" role="img"><path d="M91 40 Q137 35 133 90 L132 151" fill="none" stroke="#343e35" stroke-width="9" stroke-linecap="round"/><path d="M126 146h14l-3 34h-10z" fill="#343e35"/><rect x="65" y="28" width="19" height="30" rx="4" fill="#52604e"/><path d="M69 29L52 15h44v9H73" fill="#414c3d"/><circle cx="92" cy="35" r="11" fill="#414c3d"/><circle cx="92" cy="35" r="7" fill="#f5efdf"/><path d="M92 35l3-5" stroke="#d64e34" stroke-width="2"/><rect x="42" y="49" width="65" height="153" rx="24" fill="#d64f35"/><path d="M53 72v99" stroke="#ed8061" stroke-width="7" stroke-linecap="round"/><rect x="43" y="101" width="63" height="55" rx="2" fill="#f4ebd9"/><path d="M73 110c-7 13-15 13-12 25 3 13 23 13 23-1 0-7-5-10-4-16-4 3-4 6-5 9-3-5 0-11-2-17" fill="#d64f35"/><path d="M55 151h39" stroke="#adac92" stroke-width="2"/><rect x="48" y="196" width="53" height="9" rx="3" fill="#394337"/></svg>`;
 document.querySelector('#app').innerHTML = `<main class="app-shell"><header><div class="brand"><div class="brand-mark">♜</div><div><div class="brand-name">STATION 07</div><div class="brand-sub">A FIRE OFFICER'S WORLD</div></div></div><nav aria-label="Portfolio"><button data-section="about">The officer</button><button data-section="experience">On duty</button><button data-section="contact">Get in touch ↗</button></nav><div class="availability"><i class="dot"></i> ALWAYS READY</div></header><div class="intro"><div class="eyebrow">COURAGE. COMMITMENT. COMMUNITY.</div><h1>A life dedicated<br>to <em>protecting yours.</em></h1><p>Every call has a story. Every day has a purpose.<br>Step inside my world, one shift at a time.</p></div><div class="scene-note"><strong>07<span class="visually-hidden">Station seven</span></strong>YOUR LOCAL HERO<span>A small station.<br>A big responsibility.</span></div><div id="scene" class="scene" aria-label="Interactive 3D fire station and fire truck"></div><div class="hotspots"><button class="hotspot" data-section="about" id="spot-about">Meet the officer</button><button class="hotspot" data-section="experience" id="spot-experience">Life on duty</button><button class="hotspot" data-section="training" id="spot-training">Tools of the trade</button></div><div class="hint">↔ Drag to explore <span>·</span> Scroll to get closer <span>·</span> Click to discover</div><div class="toolbar"><button class="tool" id="lights" aria-label="Toggle emergency lights" aria-pressed="false" title="Emergency lights">ϟ</button><button class="tool" id="reset" aria-label="Reset camera" title="Reset view">⟳</button></div><footer class="footer"><div><span class="number">01 /</span><strong> WELCOME TO THE STATION</strong></div><div class="middle">BUILT ON COURAGE, DRIVEN BY DUTY</div><div>Made with purpose <span style="color:#d65036">✳</span></div></footer></main><div class="loader"><div class="eyebrow">WELCOME TO STATION 07</div>${extinguisher}<h2>Getting ready for the call.</h2><p>A little preparation. A world to explore.</p><div class="progress-track"><div class="progress-bar"></div></div><div class="progress-label">PREPARING THE STATION · <span id="percent">0</span>%</div><button class="start" disabled>START EXPLORING ↗</button><div class="loader-bottom">PROTECT · SERVE · INSPIRE</div></div><div class="modal-backdrop" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="close" aria-label="Close dialog">×</button><div id="modal-content"></div></section></div>`;
@@ -20,7 +23,9 @@ document.querySelector('.intro p').innerHTML = 'Kaushlendra Singh Chauhan<br>Fir
 document.querySelector('.brand-sub').textContent = 'KAUSHLENDRA SINGH CHAUHAN';
 document.querySelector('.loader p').textContent = 'Kaushlendra Singh Chauhan · Fire Officer at SBI';
 let profile = null; let profileError = false;
-const profileReady = fetch('/api/profile').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(data => { profile = data; }).catch(() => { profileError = true; });
+const profileReady = staticDeployment
+  ? Promise.resolve().then(() => { profile = publicProfile; })
+  : fetch('/api/profile').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(data => { profile = data; }).catch(() => { profileError = true; });
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const backdrop = document.querySelector('.modal-backdrop'); let previousFocus;
 async function openSection(section) {
@@ -28,7 +33,11 @@ async function openSection(section) {
   previousFocus = document.activeElement; await profileReady;
   const content = document.querySelector('#modal-content');
   document.querySelector('.modal').classList.toggle('vault-modal', section === 'vault');
-  if (section === 'vault') {
+  if (staticDeployment && (section === 'vault' || section === 'contact')) {
+    content.innerHTML = section === 'vault'
+      ? '<div class="eyebrow">PRIVATE DOCUMENT LIBRARY</div><h2 id="modal-title">Fire Vault</h2><p>The private document library is unavailable on this hosted portfolio. Officer access requires the secure server.</p>'
+      : '<div class="eyebrow">LET\'S CONNECT</div><h2 id="modal-title">Get in touch.</h2><p>Online messaging is not available on this hosted portfolio yet.</p><small>This website is not an emergency contact service.</small>';
+  } else if (section === 'vault') {
     backdrop.hidden = false; document.querySelector('.close').focus();
     await renderVault(content); return;
   } else if (section === 'contact') {

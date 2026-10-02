@@ -101,3 +101,5 @@ npm test
 ```
 
 Browser tests cover desktop and mobile startup, WebGL canvas rendering, portfolio dialogs, emergency light controls, contact form visibility, vault password gating, and document tiles. Isolated backend tests cover authorization, CSRF checks, file validation, protected downloads, password rotation, logout, and private-storage exposure. Tests never create real vault credentials or upload documents to the officer's vault.
+
+GitHub Pages: run npm run build:pages and publish the dist directory on the gh-pages branch. This static build includes the public officer profile; Fire Vault and contact submissions require the Node server and are unavailable on Pages. Never publish .vault or service-account credentials.
