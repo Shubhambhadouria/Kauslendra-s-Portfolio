@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/messages.ndjson
+test-results/
+playwright-report/
+.vault/
+.vault-test-*/
+.env
+.env.*
+!.env.example
+# Local previews and diagnostics
+/*.png
+/.preview-check.mjs
+*.log
