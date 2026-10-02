@@ -63,6 +63,7 @@ document.addEventListener('keydown',event => {
 
 let controls, renderer, camera, scene; let siren = false; let started = false;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const compactDevice = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4;
 const sirenGlow = document.createElement('div');
 sirenGlow.className = 'siren-glow'; sirenGlow.setAttribute('aria-hidden','true');
 sirenGlow.innerHTML = '<div class="siren-red"></div><div class="siren-blue"></div>';
@@ -85,7 +86,7 @@ function createWorld(){
   scene = new THREE.Scene(); scene.background = null;
   camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, .1, 100);
   const initial = () => { camera.position.set(15,5.5,18); controls.target.set(2.4,1.4,.4); controls.update(); };
-  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true }); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25; container.appendChild(renderer.domElement);
+  renderer = new THREE.WebGLRenderer({ antialias:!compactDevice, alpha:true }); renderer.setPixelRatio(Math.min(devicePixelRatio,compactDevice?1:1.5)); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25; container.appendChild(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 9; controls.maxDistance = 23; controls.minPolarAngle = .35; controls.maxPolarAngle = Math.PI/2.1; initial(); controls.enabled = false;
   controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity;
   controls.maxDistance = 32;
@@ -100,7 +101,7 @@ function createWorld(){
   scene.environment = pmrem.fromScene(environment, .04).texture;
   environment.dispose(); pmrem.dispose();
   renderer.toneMappingExposure = .95;
-  scene.add(new THREE.HemisphereLight(0xdce7f1,0x655c50,1.3)); const sun = new THREE.DirectionalLight(0xffecd5,3.2); sun.position.set(-6,12,7); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); Object.assign(sun.shadow.camera,{left:-16,right:16,top:16,bottom:-16}); sun.shadow.normalBias = .025; sun.shadow.bias = -.0001; scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0xdce7f1,0x655c50,1.3)); const sun = new THREE.DirectionalLight(0xffecd5,3.2); sun.position.set(-6,12,7); sun.castShadow = true; const shadowSize=compactDevice?512:1024;sun.shadow.mapSize.set(shadowSize,shadowSize); Object.assign(sun.shadow.camera,{left:-16,right:16,top:16,bottom:-16}); sun.shadow.normalBias = .025; sun.shadow.bias = -.0001; scene.add(sun);
   const mat = (color, roughness=.8, metalness=0) => new THREE.MeshStandardMaterial({color,roughness,metalness});
   const red = new THREE.MeshPhysicalMaterial({color:'#a91e16',roughness:.28,metalness:.25,clearcoat:1,clearcoatRoughness:.18}), dark = mat('#252b2e'), cream = mat('#bcb8aa'), trim = mat('#e0e2dd'), steel = mat('#a5adb3',.26,.85), asphalt = mat('#43484b'), glass = new THREE.MeshPhysicalMaterial({color:'#233d49',roughness:.08,metalness:.35,clearcoat:1}), tire = mat('#171a1b'), terracotta = mat('#655a51'), green = mat('#475440');
   // Deterministic, local surface maps: aggregate, plaster and rubber stay crisp at close range.
@@ -183,7 +184,7 @@ function createWorld(){
   response = createIncidentResponse({world, truck, cylinder, box, steel, dark, reduced, button:waterButton, status:waterStatus, onSiren:setSiren});
   // Architecture is stationary; avoid redrawing its shadow map every animation frame.
   renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
-  let previousFrame, lastShadowFrame = 0;
+  let previousFrame, lastShadowFrame = 0, lastRenderedFrame = -Infinity;
   const points=[['about',new THREE.Vector3(1.5,2.0,-.1)],['experience',new THREE.Vector3(-1.4,2.1,2.1)],['training',new THREE.Vector3(3.5,.65,1)]];
   function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.zoom=w<700?Math.min(.65,w/h*1.03):.83;camera.setViewOffset(w,h,0,-h*.10,w,h);camera.updateProjectionMatrix();}
   resize();window.addEventListener('resize',resize);
@@ -195,6 +196,9 @@ function createWorld(){
   renderer.domElement.addEventListener('pointerdown',event=>{pointerDown=[event.clientX,event.clientY];});
   renderer.domElement.addEventListener('pointerup',event=>{if(!pointerDown||Math.hypot(event.clientX-pointerDown[0],event.clientY-pointerDown[1])>5||!started)return;const bounds=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((event.clientX-bounds.left)/bounds.width*2-1,-(event.clientY-bounds.top)/bounds.height*2+1),camera);if(raycaster.intersectObjects(truck.children,true).length)openSection('experience');});
   renderer.setAnimationLoop(time=>{
+    if(!started || !backdrop.hidden || document.hidden){previousFrame=undefined;return;}
+    if(time-lastRenderedFrame < 1000/(compactDevice?30:45))return;
+    lastRenderedFrame=time;
     if(backdrop.hidden) controls.update();
     const dt = previousFrame === undefined ? 0 : (time - previousFrame) / 1000;
     previousFrame = time;
@@ -217,4 +221,4 @@ function createWorld(){
 let sceneReady=false;
 try{createWorld();sceneReady=true;}catch(error){console.error(error);waterStatus.hidden=true;document.querySelector('#scene').innerHTML='<div class="fallback"><h2>Your station is ready.</h2><p>This device could not start the 3D view. You can still explore the officer, service, and contact sections using the navigation.</p></div>';document.querySelector('.hotspots').hidden=true;document.querySelector('.toolbar').hidden=true;document.querySelector('.hint').hidden=true;}
 requestAnimationFrame(()=>{document.querySelector('.progress-bar').style.width='100%';document.querySelector('#percent').textContent='100';document.querySelector('.progress-label').firstChild.textContent='STATION READY · ';document.querySelector('.start').disabled=false;});
-document.querySelector('.start').addEventListener('click',()=>{started=true;document.querySelector('.loader').classList.add('departed');document.querySelector('.loader').setAttribute('inert','');if(sceneReady)controls.enabled=true;document.querySelector('nav button').focus();const requestedSection=new URLSearchParams(window.location.search).get('section');if(!staticDeployment && ['vault','contact'].includes(requestedSection))openSection(requestedSection);});
+document.querySelector('.start').addEventListener('click',()=>{started=true;document.querySelector('.loader').classList.add('departed');document.querySelector('.loader').setAttribute('inert','');if(sceneReady)controls.enabled=true;document.querySelector('nav button').focus();if(staticDeployment)fetch(`${hostedServiceOrigin}/api/health`,{mode:'no-cors',credentials:'omit',cache:'no-store'}).catch(()=>{});const requestedSection=new URLSearchParams(window.location.search).get('section');if(!staticDeployment && ['vault','contact'].includes(requestedSection))openSection(requestedSection);});
