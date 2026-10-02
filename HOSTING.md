@@ -28,7 +28,7 @@ Only the officer can edit the folder link. Original Drive bytes are read through
 
 ## Connect the public portfolio
 
-The backend serves the full website and vault on its own HTTPS origin. Once its URL is available, link Fire Vault on GitHub Pages to that website. Existing same-origin cookies and CSRF protection remain in place.
+The backend is https://station-07-backend.onrender.com. Fire Vault and contact buttons in the Pages build navigate to this service with the requested section. Click START EXPLORING on the hosted welcome screen to open it. Existing same-origin cookies and CSRF protection remain in place. The service origin is configured in src/main.js.
 
 Verify /api/health, officer login, viewer restrictions, Drive settings and persistence after a restart before linking the live site. Committing the template does not deploy the backend; the hosting account and database credentials are required.
 
